@@ -55,7 +55,8 @@ describe('TTSEngine', () => {
     const TTSEngine = require('../scripts/core/tts.js');
     const tts = new TTSEngine(createMockConfig());
     const cmd = tts._buildCommand('edge-tts', 'Hello world', 'en-US-AriaNeural', '/tmp/out.mp3', 'en');
-    assert.ok(cmd.includes('edge-tts'));
+    // On Windows, command is "python -m edge_tts"; on Unix, "edge-tts"
+    assert.ok(cmd.includes('edge_tts') || cmd.includes('edge-tts'));
     assert.ok(cmd.includes('--voice'));
     assert.ok(cmd.includes('en-US-AriaNeural'));
     assert.ok(cmd.includes('--text'));

@@ -92,8 +92,13 @@ class TTSEngine {
       .replace(/`/g, '\\`')
       .replace(/\r?\n|\r/g, ' ');
     switch (engine) {
-      case 'edge-tts':
-        return `edge-tts --voice "${voice || lang}" --text "${safeText}" --write-media "${outPath}"`;
+      case 'edge-tts': {
+        // On Windows, edge-tts may not be in PATH as a command; use python -m edge_tts
+        const edgeCmd = process.platform === 'win32'
+          ? `python -m edge_tts`
+          : `edge-tts`;
+        return `${edgeCmd} --voice "${voice || lang}" --text "${safeText}" --write-media "${outPath}"`;
+      }
       case 'elevenlabs': {
         const apiKey = this._config.get('tts.engines.elevenlabs.api_key') || process.env.ELEVENLABS_API_KEY || '';
         const voiceId = voice || this._config.get('tts.engines.elevenlabs.voice_id') || '';
