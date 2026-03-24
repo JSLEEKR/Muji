@@ -7,7 +7,7 @@ class BGMManager {
     this._config = config;
     this._process = null;
     this._currentMode = null;
-    this._volume = config.get('bgm.volume') || 30;
+    this._volume = config.get('bgm.volume') ?? 30;
     this._socketPath = config.getSocketPath();
     this._restartAttempted = false;
   }

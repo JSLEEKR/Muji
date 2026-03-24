@@ -144,6 +144,7 @@ sfx:
     pomodoro_warning: tick.wav
     break_end: bell-soft.wav
     error_generic: error.wav
+    test_success: success.wav
     task_completed: success.wav
     session_end: chime-soft.wav
 
@@ -180,6 +181,10 @@ notifications:
     test_fail:
       en: "{count} tests failed."
       ko: "테스트 {count}개 실패했어."
+
+    test_success:
+      en: null                    # null = SFX only, no TTS
+      ko: null
 
     build_success:
       en: "Build complete, no errors."

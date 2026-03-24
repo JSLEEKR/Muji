@@ -12,7 +12,7 @@ class TTSEngine {
     this._cacheEnabled = config.get('tts.cache_enabled') !== false;
     this._cacheDir = config.get('tts.cache_dir')?.replace('~', os.homedir())
       || path.join(os.homedir(), '.claude', '.muji', 'tts-cache');
-    this._cacheMaxMb = config.get('tts.cache_max_mb') || 200;
+    this._cacheMaxMb = config.get('tts.cache_max_mb') ?? 200;
   }
 
   async synthesize(text, lang) {

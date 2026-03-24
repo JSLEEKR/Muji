@@ -46,7 +46,7 @@ function commandMatchesPattern(command, pattern) {
         const countMatch = (stderr + stdout).match(/(\d+)\s+fail/i);
         const count = countMatch ? parseInt(countMatch[1], 10) : 1;
         await notifier.notify('test_fail', { count });
-      } else { await notifier.notify('build_success'); }
+      } else { await notifier.notify('test_success'); }
       return;
     }
   }

@@ -50,8 +50,8 @@ class Notifier {
     const duckingEnabled = this._config.get('notifications.ducking.enabled');
     const bgmPlaying = this._bgm.isPlaying();
     if (!duckingEnabled || !bgmPlaying) { await callback(); return; }
-    const duckVolume = this._config.get('notifications.ducking.duck_volume') || 10;
-    const fadeDuration = this._config.get('notifications.ducking.fade_duration_ms') || 300;
+    const duckVolume = this._config.get('notifications.ducking.duck_volume') ?? 10;
+    const fadeDuration = this._config.get('notifications.ducking.fade_duration_ms') ?? 300;
     const originalVolume = this._bgm.getVolume();
     await this._bgm.fadeVolume(duckVolume, fadeDuration);
     try { await callback(); } finally { await this._bgm.fadeVolume(originalVolume, fadeDuration); }
@@ -63,7 +63,7 @@ class Notifier {
   }
 
   async _playSFX(filePath) {
-    const volume = this._config.get('sfx.volume') || 80;
+    const volume = this._config.get('sfx.volume') ?? 80;
     return this._playAudio(filePath, volume);
   }
 

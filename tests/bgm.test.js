@@ -63,6 +63,19 @@ describe('BGMManager', () => {
     assert.strictEqual(mgr._clampVolume(50), 50);
   });
 
+  it('preserves volume=0 without defaulting to 30', () => {
+    const BGMManager = require('../scripts/core/bgm.js');
+    const zeroVolumeConfig = {
+      ...createMockConfig(),
+      get: (p) => {
+        if (p === 'bgm.volume') return 0;
+        return createMockConfig().get(p);
+      },
+    };
+    const mgr = new BGMManager(zeroVolumeConfig);
+    assert.strictEqual(mgr._volume, 0);
+  });
+
   it('fadeVolume with durationMs=0 sets volume instantly', async () => {
     const BGMManager = require('../scripts/core/bgm.js');
     const mgr = new BGMManager(createMockConfig());
