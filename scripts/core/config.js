@@ -72,6 +72,11 @@ class Config {
     return path.join(tmpDir, 'muji-bgm.pid');
   }
 
+  getActivityPath() {
+    const tmpDir = process.platform === 'win32' ? os.tmpdir() : '/tmp';
+    return path.join(tmpDir, 'muji-last-activity.json');
+  }
+
   getStatusPath() {
     const tmpDir = process.platform === 'win32' ? os.tmpdir() : '/tmp';
     return path.join(tmpDir, 'muji-pomodoro-status.json');

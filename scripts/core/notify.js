@@ -1,5 +1,6 @@
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
+const path = require('node:path');
 
 class Notifier {
   constructor(config, bgmManager, ttsEngine) {
@@ -21,12 +22,31 @@ class Notifier {
           await this._playSFX(sfxPath);
         }
         if (message) {
-          const lang = this._config.getLanguage();
-          const audioFile = await this._tts.synthesize(message, lang);
-          if (audioFile) {
-            await this._playAudio(audioFile);
+          // Try pre-recorded voice file first, fall back to TTS
+          const voicePath = this._getVoicePath(event);
+          if (voicePath) {
+            await this._playAudio(voicePath);
+          } else {
+            const lang = this._config.getLanguage();
+            const audioFile = await this._tts.synthesize(message, lang);
+            if (audioFile) {
+              await this._playAudio(audioFile);
+            }
           }
         }
+      });
+    });
+  }
+
+  /**
+   * Play a pre-recorded voice file directly (for hourly/idle messages).
+   */
+  async notifyVoice(voiceFile) {
+    if (!this._config.get('notifications.enabled')) return;
+    if (!fs.existsSync(voiceFile)) return;
+    return this._queueNotification(async () => {
+      await this._duckAndRestore(async () => {
+        await this._playAudio(voiceFile);
       });
     });
   }
@@ -42,9 +62,47 @@ class Notifier {
     if (audioFile) { await this._playAudio(audioFile); }
   }
 
+  /**
+   * Notify with dynamic project-aware message via TTS (ignores pre-recorded files).
+   * Used for session_start/session_end when dynamic_project_name is enabled.
+   */
+  async notifyDynamic(event, vars = {}) {
+    if (!this._config.get('notifications.enabled')) return;
+    const sfxPath = this._config.getSFXPath(event);
+    const message = this._resolveMessage(event, vars);
+    if (!sfxPath && !message) return;
+    return this._queueNotification(async () => {
+      await this._duckAndRestore(async () => {
+        if (sfxPath && fs.existsSync(sfxPath)) {
+          await this._playSFX(sfxPath);
+        }
+        if (message) {
+          const lang = this._config.getLanguage();
+          const audioFile = await this._tts.synthesize(message, lang);
+          if (audioFile) { await this._playAudio(audioFile); }
+        }
+      });
+    });
+  }
+
   _resolveMessage(event, vars) {
     const lang = this._config.getLanguage();
     return this._config.getMessage(event, lang, vars);
+  }
+
+  /**
+   * Check for pre-recorded voice file at sounds/voices/{lang}/{event}.mp3
+   */
+  _getVoicePath(event) {
+    const lang = this._config.getLanguage();
+    const voicePath = path.join(this._config.getPluginDir(), 'sounds', 'voices', lang, `${event}.mp3`);
+    if (fs.existsSync(voicePath)) return voicePath;
+    // Fallback to English
+    if (lang !== 'en') {
+      const enPath = path.join(this._config.getPluginDir(), 'sounds', 'voices', 'en', `${event}.mp3`);
+      if (fs.existsSync(enPath)) return enPath;
+    }
+    return null;
   }
 
   async _duckAndRestore(callback) {

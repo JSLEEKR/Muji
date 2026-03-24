@@ -1,3 +1,4 @@
+const path = require('node:path');
 const { bootstrap } = require('./_bootstrap.js');
 
 (async () => {
@@ -7,5 +8,11 @@ const { bootstrap } = require('./_bootstrap.js');
       console.error('[Muji] BGM auto-start failed:', err.message);
     }
   }
-  await notifier.notify('session_start');
+  const useDynamic = config.get('notifications.dynamic_project_name');
+  if (useDynamic) {
+    const project = path.basename(process.cwd());
+    await notifier.notifyDynamic('session_start', { project });
+  } else {
+    await notifier.notify('session_start');
+  }
 })();

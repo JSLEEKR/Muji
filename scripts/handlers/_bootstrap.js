@@ -1,7 +1,15 @@
+const fs = require('node:fs');
 const Config = require('../core/config.js');
 const BGMManager = require('../core/bgm.js');
 const TTSEngine = require('../core/tts.js');
 const Notifier = require('../core/notify.js');
+
+function touchActivity(config) {
+  try {
+    const activityPath = config.getActivityPath();
+    fs.writeFileSync(activityPath, JSON.stringify({ timestamp: Date.now() }), 'utf8');
+  } catch { /* best-effort */ }
+}
 
 function bootstrap() {
   const config = new Config();
@@ -9,6 +17,7 @@ function bootstrap() {
   const bgm = new BGMManager(config);
   const tts = new TTSEngine(config);
   const notifier = new Notifier(config, bgm, tts);
+  touchActivity(config);
   return { config, bgm, tts, notifier };
 }
 

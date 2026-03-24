@@ -26,6 +26,7 @@ function createMockConfig() {
     },
     getLanguage: () => 'en',
     getMpvPath: () => 'mpv',
+    getPluginDir: () => __dirname,
   };
 }
 

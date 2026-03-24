@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const path = require('node:path');
 
 class PomodoroTimer {
   constructor(config, notifier, bgmManager) {
@@ -14,6 +15,10 @@ class PomodoroTimer {
     this._endTime = null;
     this._pausedRemaining = null;
     this._previousBgmMode = null;
+    // Wellness timers (hourly chime + idle detection)
+    this._hourlyTimer = null;
+    this._idleTimer = null;
+    this._idleNotified = false;
   }
 
   start() {
@@ -63,7 +68,6 @@ class PomodoroTimer {
     const callback = this._phase === 'work' ? () => this._onWorkEnd() : () => this._onBreakEnd();
     this._endTime = Date.now() + remaining;
     this._timer = setTimeout(callback, remaining);
-    // Re-arm the warning timer if we're in the work phase and there's still time for it
     if (this._phase === 'work') {
       const warningThresholdMs = 5 * 60 * 1000;
       if (remaining > warningThresholdMs) {
@@ -88,6 +92,84 @@ class PomodoroTimer {
       is_paused: this._isPaused,
     };
   }
+
+  // ── Wellness: hourly chime + idle detection ──
+
+  startWellness() {
+    this.stopWellness();
+    const hourlyEnabled = this._config.get('wellness.hourly.enabled') !== false;
+    const idleEnabled = this._config.get('wellness.idle.enabled') !== false;
+    const hourlyMs = ((this._config.get('wellness.hourly.interval_minutes')) || 60) * 60 * 1000;
+    const idleCheckMs = 60 * 1000; // check every minute
+
+    if (hourlyEnabled) {
+      this._hourlyTimer = setInterval(() => this._onHourlyChime(), hourlyMs);
+    }
+    if (idleEnabled) {
+      this._idleTimer = setInterval(() => this._onIdleCheck(), idleCheckMs);
+    }
+  }
+
+  stopWellness() {
+    if (this._hourlyTimer) { clearInterval(this._hourlyTimer); this._hourlyTimer = null; }
+    if (this._idleTimer) { clearInterval(this._idleTimer); this._idleTimer = null; }
+    this._idleNotified = false;
+  }
+
+  async _onHourlyChime() {
+    const messages = this._config.get('wellness.hourly.messages') || ['hourly_01', 'hourly_02', 'hourly_03'];
+    const pick = messages[Math.floor(Math.random() * messages.length)];
+    const voicePath = this._resolveVoicePath(pick);
+    if (voicePath) {
+      await this._notifier.notifyVoice(voicePath);
+    } else {
+      await this._notifier.notify(pick);
+    }
+  }
+
+  async _onIdleCheck() {
+    const thresholdMin = this._config.get('wellness.idle.threshold_minutes') || 30;
+    const thresholdMs = thresholdMin * 60 * 1000;
+    const activityPath = this._config.getActivityPath();
+
+    let lastActivity = 0;
+    try {
+      const data = JSON.parse(fs.readFileSync(activityPath, 'utf8'));
+      lastActivity = data.timestamp || 0;
+    } catch {
+      return; // no activity file yet
+    }
+
+    const elapsed = Date.now() - lastActivity;
+    if (elapsed >= thresholdMs && !this._idleNotified) {
+      this._idleNotified = true;
+      const messages = this._config.get('wellness.idle.messages') || ['idle_01', 'idle_02', 'idle_03', 'idle_04', 'idle_05'];
+      const pick = messages[Math.floor(Math.random() * messages.length)];
+      const voicePath = this._resolveVoicePath(pick);
+      if (voicePath) {
+        await this._notifier.notifyVoice(voicePath);
+      } else {
+        await this._notifier.notify(pick);
+      }
+    } else if (elapsed < thresholdMs) {
+      // User became active again, reset so we can notify again next idle period
+      this._idleNotified = false;
+    }
+  }
+
+  _resolveVoicePath(event) {
+    const lang = this._config.getLanguage();
+    const pluginDir = this._config.getPluginDir();
+    const voicePath = path.join(pluginDir, 'sounds', 'voices', lang, `${event}.mp3`);
+    if (fs.existsSync(voicePath)) return voicePath;
+    if (lang !== 'en') {
+      const enPath = path.join(pluginDir, 'sounds', 'voices', 'en', `${event}.mp3`);
+      if (fs.existsSync(enPath)) return enPath;
+    }
+    return null;
+  }
+
+  // ── Pomodoro internals ──
 
   _getBreakType(sessionNumber) {
     const longBreakEvery = this._config.get('pomodoro.sessions_before_long_break') || 4;
@@ -166,6 +248,13 @@ if (require.main === module) {
   const action = process.argv[2];
   if (action === 'start') {
     timer._savePID(); timer.start();
+    // Always start wellness monitoring alongside pomodoro daemon
+    timer.startWellness();
     setInterval(() => timer._saveStatus(), 5000);
+  } else if (action === 'wellness') {
+    // Wellness-only mode: no pomodoro timer, just hourly/idle alerts
+    timer._savePID();
+    timer.startWellness();
+    setInterval(() => {}, 60000); // keep process alive
   }
 }

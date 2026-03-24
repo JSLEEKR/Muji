@@ -154,6 +154,11 @@ sfx:
 notifications:
   enabled: true
 
+  # Use project name in session start/end messages via TTS (edge-tts, free)
+  # When true: "git-Muji 프로젝트, 시작할게" (dynamic TTS)
+  # When false: uses pre-recorded voice files from sounds/voices/
+  dynamic_project_name: true
+
   # Ducking: lower BGM volume during TTS/SFX playback
   ducking:
     enabled: true
@@ -166,9 +171,9 @@ notifications:
   # Define per language; falls back to 'en' if current language not found
   messages:
     session_start:
-      en: "Let's get started."
-      ko: "같이 시작해볼까?"
-      ja: "始めよう。"
+      en: "{project} project, let's get started."
+      ko: "{project} 프로젝트, 시작할게."
+      ja: "{project}プロジェクト、始めよう。"
 
     commit_success:
       en: null                    # null = SFX only, no TTS
@@ -215,12 +220,40 @@ notifications:
       ko: "작업 끝났어."
 
     session_end:
-      en: "Good work today."
-      ko: "오늘 수고했어."
+      en: "{project} project, wrapping up. Great session."
+      ko: "{project} 프로젝트 작업 마무리됐어. 수고했어."
 
     error_generic:
       en: "An error occurred."
       ko: "에러 발생했어."
+
+    # Hourly chime messages (random pick)
+    hourly_01:
+      en: "It has been an hour. How is it going?"
+      ko: "벌써 한 시간 지났어. 잘 되고 있어?"
+    hourly_02:
+      en: "Another hour down. Don't forget to hydrate."
+      ko: "한 시간 지났다. 물 마시는 거 잊지 마."
+    hourly_03:
+      en: "One more hour. You're making good progress."
+      ko: "한 시간 또 지났네. 잘 하고 있어."
+
+    # Idle reminder messages (30min+ no activity, random pick)
+    idle_01:
+      en: "It has been a while. Maybe go for a short walk?"
+      ko: "좀 쉬어가는 게 어때? 잠깐 산책하고 와."
+    idle_02:
+      en: "You have been quiet. Stretch a bit, I will be here."
+      ko: "좀 조용하네. 스트레칭이라도 하고 와, 기다릴게."
+    idle_03:
+      en: "Still there? Take a breather if you need one."
+      ko: "아직 있어? 필요하면 잠깐 쉬어도 돼."
+    idle_04:
+      en: "No rush. Grab some water and come back fresh."
+      ko: "서두를 거 없어. 물 한 잔 하고 와."
+    idle_05:
+      en: "Hey, do not forget to rest your eyes for a moment."
+      ko: "야, 눈 좀 쉬어줘. 잠깐이라도."
 
 # ----------------------------------------------------------
 # Pomodoro Timer
@@ -239,6 +272,29 @@ pomodoro:
     work: null                    # null = keep current mode
     short_break: nature
     long_break: nature
+
+# ----------------------------------------------------------
+# Wellness (Hourly Chime + Idle Detection)
+# ----------------------------------------------------------
+# Runs inside the pomodoro daemon. Works even when pomodoro timer is stopped.
+# Start with: node scripts/core/pomodoro.js wellness
+wellness:
+  hourly:
+    enabled: true
+    interval_minutes: 60            # Chime every N minutes
+    messages:                       # Random pick from this list (maps to sounds/voices/)
+      - hourly_01
+      - hourly_02
+      - hourly_03
+  idle:
+    enabled: true
+    threshold_minutes: 30           # Notify after N minutes of no user activity
+    messages:                       # Random pick from this list
+      - idle_01
+      - idle_02
+      - idle_03
+      - idle_04
+      - idle_05
 
 # ----------------------------------------------------------
 # Focus Modes (Presets)
