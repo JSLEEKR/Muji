@@ -1,5 +1,12 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
+const tmpDir = os.tmpdir();
+const TEST_PID_PATH = path.join(tmpDir, 'cfm-test-pomodoro.pid');
+const TEST_STATUS_PATH = path.join(tmpDir, 'cfm-test-pomodoro-status.json');
 
 function createMockConfig() {
   return {
@@ -18,8 +25,8 @@ function createMockConfig() {
       };
       return data[p];
     },
-    getPidPath: () => '/tmp/cfm-test-pomodoro.pid',
-    getStatusPath: () => '/tmp/cfm-test-pomodoro-status.json',
+    getPidPath: () => TEST_PID_PATH,
+    getStatusPath: () => TEST_STATUS_PATH,
   };
 }
 
@@ -80,5 +87,46 @@ describe('PomodoroTimer', () => {
     assert.strictEqual(timer._getBreakType(3), 'short_break');
     assert.strictEqual(timer._getBreakType(4), 'long_break');
     assert.strictEqual(timer._getBreakType(8), 'long_break');
+  });
+
+  it('saves PID file when started', () => {
+    const PomodoroTimer = require('../scripts/core/pomodoro.js');
+    // Clean up before test
+    try { fs.unlinkSync(TEST_PID_PATH); } catch { }
+    const timer = new PomodoroTimer(createMockConfig(), createMockNotifier(), createMockBGM());
+    timer.start();
+    const pidExists = fs.existsSync(TEST_PID_PATH);
+    timer.stop();
+    assert.ok(pidExists, 'PID file should be created on start()');
+    // After stop, PID file should be removed
+    assert.strictEqual(fs.existsSync(TEST_PID_PATH), false, 'PID file should be removed on stop()');
+  });
+
+  it('re-arms warning timer on resume when work phase has more than 5 minutes left', () => {
+    const PomodoroTimer = require('../scripts/core/pomodoro.js');
+    const timer = new PomodoroTimer(createMockConfig(), createMockNotifier(), createMockBGM());
+    timer.start();
+    // Simulate being 10 minutes into the session (15 minutes remaining, > 5 min threshold)
+    timer._endTime = Date.now() + 10 * 60 * 1000; // 10 minutes remaining
+    timer.pause();
+    // warningTimer should be null after pause
+    assert.strictEqual(timer._warningTimer, null);
+    timer.resume();
+    // With 10 min remaining, warning timer should be re-armed (fires at 5 min mark)
+    assert.notStrictEqual(timer._warningTimer, null, 'Warning timer should be re-armed on resume when > 5 min remaining');
+    timer.stop();
+  });
+
+  it('does NOT re-arm warning timer on resume when work phase has 5 minutes or less left', () => {
+    const PomodoroTimer = require('../scripts/core/pomodoro.js');
+    const timer = new PomodoroTimer(createMockConfig(), createMockNotifier(), createMockBGM());
+    timer.start();
+    // Simulate being 22 minutes into the session (3 minutes remaining, <= 5 min threshold)
+    timer._endTime = Date.now() + 3 * 60 * 1000; // 3 minutes remaining
+    timer.pause();
+    timer.resume();
+    // With 3 min remaining (already past warning time), no warning timer should be set
+    assert.strictEqual(timer._warningTimer, null, 'Warning timer should NOT be set when <= 5 min remaining');
+    timer.stop();
   });
 });

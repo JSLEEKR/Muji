@@ -97,8 +97,13 @@ class Config {
     const home = os.homedir();
     const userPath = path.join(home, '.claude', '.chill-focus-mate', 'config.yaml');
     if (!fs.existsSync(userPath)) return null;
-    const content = fs.readFileSync(userPath, 'utf8');
-    return YAML.parse(content);
+    try {
+      const content = fs.readFileSync(userPath, 'utf8');
+      return YAML.parse(content);
+    } catch (err) {
+      console.warn(`[CFM] Failed to load user config (${userPath}): ${err.message}. Using defaults.`);
+      return null;
+    }
   }
 
   _merge(defaults, user) {

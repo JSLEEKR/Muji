@@ -3,7 +3,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
-const REQUIRED = ['mpv', 'yt-dlp', 'socat'];
+// socat is only needed on Unix (mpv IPC uses Unix sockets there);
+// on Windows, mpv uses a named pipe which Node's net module can connect to directly.
+const REQUIRED = process.platform === 'win32' ? ['mpv', 'yt-dlp'] : ['mpv', 'yt-dlp', 'socat'];
 const TTS_ENGINES = {
   'edge-tts': 'edge-tts --help',
   'espeak-ng': 'espeak-ng --version',
@@ -40,9 +42,9 @@ function main() {
     } else if (process.platform === 'linux') {
       console.log('  sudo apt install mpv socat && pip install yt-dlp');
     } else {
+      // Windows: socat is not required (mpv uses named pipes on Windows)
       console.log('  Install mpv from https://mpv.io/installation/');
       console.log('  Install yt-dlp: pip install yt-dlp');
-      console.log('  Install socat from your package manager');
     }
   }
 

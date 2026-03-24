@@ -69,13 +69,17 @@ class Notifier {
 
   async _playAudio(filePath, volume) {
     return new Promise((resolve) => {
+      let resolved = false;
+      function done() {
+        if (!resolved) { resolved = true; clearTimeout(timer); resolve(); }
+      }
       const args = ['--no-video', '--really-quiet'];
       if (volume !== undefined) { args.push(`--volume=${volume}`); }
       args.push(filePath);
       const proc = spawn('mpv', args, { stdio: 'ignore' });
-      proc.on('exit', resolve);
-      proc.on('error', (err) => { console.warn('[CFM] Audio playback error:', err.message); resolve(); });
-      setTimeout(() => { proc.kill(); resolve(); }, 30000);
+      proc.on('exit', done);
+      proc.on('error', (err) => { console.warn('[CFM] Audio playback error:', err.message); done(); });
+      const timer = setTimeout(() => { try { proc.kill(); } catch { } done(); }, 30000);
     });
   }
 }

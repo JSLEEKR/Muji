@@ -28,6 +28,7 @@ class PomodoroTimer {
       const warningMs = (minutes - 5) * 60 * 1000;
       this._warningTimer = setTimeout(() => this._onWarning(), warningMs);
     }
+    this._savePID();
     this._saveStatus();
   }
 
@@ -62,6 +63,13 @@ class PomodoroTimer {
     const callback = this._phase === 'work' ? () => this._onWorkEnd() : () => this._onBreakEnd();
     this._endTime = Date.now() + remaining;
     this._timer = setTimeout(callback, remaining);
+    // Re-arm the warning timer if we're in the work phase and there's still time for it
+    if (this._phase === 'work') {
+      const warningThresholdMs = 5 * 60 * 1000;
+      if (remaining > warningThresholdMs) {
+        this._warningTimer = setTimeout(() => this._onWarning(), remaining - warningThresholdMs);
+      }
+    }
     this._saveStatus();
   }
 

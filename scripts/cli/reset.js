@@ -25,8 +25,10 @@ function main() {
 
   if (process.platform !== 'win32') {
     const socketPath = '/tmp/cfm-bgm-socket';
-    try { fs.unlinkSync(socketPath); } catch { }
-    console.log('Removed mpv socket.');
+    try {
+      fs.unlinkSync(socketPath);
+      console.log('Removed mpv socket.');
+    } catch { /* socket did not exist, nothing to remove */ }
   }
 
   try {

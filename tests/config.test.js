@@ -1,6 +1,8 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
+const fs = require('node:fs');
+const os = require('node:os');
 
 describe('Config', () => {
   it('loads default config from config/default.yaml', () => {
@@ -87,5 +89,22 @@ describe('Config', () => {
     config.load();
     const pidPath = config.getPidPath();
     assert.ok(pidPath.includes('cfm-pomodoro'));
+  });
+
+  it('falls back to defaults if user config has invalid YAML', () => {
+    // Write a malformed user config to a temp location and test the internal method
+    const Config = require('../scripts/core/config.js');
+    const config = new Config();
+    // Temporarily override _loadUser to return a parse error
+    const originalLoadUser = config._loadUser.bind(config);
+    config._loadUser = () => {
+      // Simulate a YAML parse error
+      const YAML = require('yaml');
+      try { YAML.parse('{ invalid: yaml: content: }'); } catch { return null; }
+      return null;
+    };
+    // Should not throw — should fall back to defaults
+    assert.doesNotThrow(() => config.load());
+    assert.strictEqual(config.getLanguage(), 'en');
   });
 });

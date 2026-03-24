@@ -68,4 +68,28 @@ describe('TTSEngine', () => {
     assert.ok(cmd.includes('espeak'));
     assert.ok(cmd.includes('-v en'));
   });
+
+  it('escapes double quotes in text for edge-tts command', () => {
+    const TTSEngine = require('../scripts/core/tts.js');
+    const tts = new TTSEngine(createMockConfig());
+    const cmd = tts._buildCommand('edge-tts', 'Say "hello"', 'en-US-AriaNeural', '/tmp/out.mp3');
+    // The double-quote should be escaped as \"
+    assert.ok(cmd.includes('\\"hello\\"'), 'Double quotes in text should be escaped');
+  });
+
+  it('escapes backticks in text to prevent command substitution', () => {
+    const TTSEngine = require('../scripts/core/tts.js');
+    const tts = new TTSEngine(createMockConfig());
+    const cmd = tts._buildCommand('edge-tts', 'Run `ls`', 'en-US-AriaNeural', '/tmp/out.mp3');
+    assert.ok(cmd.includes('\\`'), 'Backticks in text should be escaped');
+  });
+
+  it('throws for unknown TTS engine', () => {
+    const TTSEngine = require('../scripts/core/tts.js');
+    const tts = new TTSEngine(createMockConfig());
+    assert.throws(
+      () => tts._buildCommand('unknown-engine', 'Hello', 'en', '/tmp/out.mp3'),
+      /Unknown TTS engine/,
+    );
+  });
 });

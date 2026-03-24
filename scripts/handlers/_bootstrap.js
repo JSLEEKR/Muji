@@ -15,12 +15,19 @@ function bootstrap() {
 function readStdin() {
   return new Promise((resolve) => {
     let data = '';
+    let resolved = false;
+    function done(value) {
+      if (!resolved) { resolved = true; resolve(value); }
+    }
     process.stdin.setEncoding('utf8');
     process.stdin.on('data', (chunk) => (data += chunk));
     process.stdin.on('end', () => {
-      try { resolve(JSON.parse(data)); } catch { resolve({}); }
+      try { done(JSON.parse(data)); } catch { done({}); }
     });
-    setTimeout(() => resolve({}), 1000);
+    process.stdin.on('error', () => done({}));
+    const timer = setTimeout(() => done({}), 1000);
+    // Allow the timer to not block process exit if stdin ends first
+    if (timer.unref) timer.unref();
   });
 }
 

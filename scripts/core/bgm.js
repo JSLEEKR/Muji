@@ -27,7 +27,7 @@ class BGMManager {
 
   async stop() {
     if (this._process) {
-      this._process.kill();
+      try { this._process.kill(); } catch { /* already exited */ }
       this._process = null;
     }
     this._currentMode = null;
@@ -109,7 +109,9 @@ class BGMManager {
           this._process = null;
           if (!this._restartAttempted) {
             this._restartAttempted = true;
-            this._spawnMpv(source).catch(() => {
+            this._spawnMpv(source).then(() => {
+              this._restartAttempted = false;
+            }).catch(() => {
               console.error('[CFM] mpv restart failed. BGM disabled.');
             });
           }
@@ -129,7 +131,11 @@ class BGMManager {
   }
 
   async _sendIPC(command) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
+      let resolved = false;
+      function done(value) {
+        if (!resolved) { resolved = true; clearTimeout(timer); resolve(value); }
+      }
       const client = net.connect(this._socketPath);
       let data = '';
       client.on('connect', () => {
@@ -137,13 +143,13 @@ class BGMManager {
       });
       client.on('data', (chunk) => {
         data += chunk;
-        try { const parsed = JSON.parse(data); client.end(); resolve(parsed); } catch { }
+        try { const parsed = JSON.parse(data); client.end(); done(parsed); } catch { }
       });
-      client.on('error', (err) => { resolve(null); });
+      client.on('error', () => { done(null); });
       client.on('end', () => {
-        try { resolve(data ? JSON.parse(data) : null); } catch { resolve(null); }
+        try { done(data ? JSON.parse(data) : null); } catch { done(null); }
       });
-      setTimeout(() => { client.destroy(); resolve(null); }, 2000);
+      const timer = setTimeout(() => { client.destroy(); done(null); }, 2000);
     });
   }
 
