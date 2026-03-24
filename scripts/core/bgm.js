@@ -109,7 +109,8 @@ class BGMManager {
     ];
     return new Promise((resolve, reject) => {
       try {
-        this._process = spawn('mpv', args, { stdio: 'ignore', detached: false });
+        this._process = spawn('mpv', args, { stdio: 'ignore', detached: true });
+        this._process.unref();
         this._process.on('error', (err) => {
           console.error('[Muji] mpv error:', err.message);
           this._process = null;

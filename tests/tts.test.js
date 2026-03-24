@@ -54,7 +54,7 @@ describe('TTSEngine', () => {
   it('builds correct edge-tts command', () => {
     const TTSEngine = require('../scripts/core/tts.js');
     const tts = new TTSEngine(createMockConfig());
-    const cmd = tts._buildCommand('edge-tts', 'Hello world', 'en-US-AriaNeural', '/tmp/out.mp3');
+    const cmd = tts._buildCommand('edge-tts', 'Hello world', 'en-US-AriaNeural', '/tmp/out.mp3', 'en');
     assert.ok(cmd.includes('edge-tts'));
     assert.ok(cmd.includes('--voice'));
     assert.ok(cmd.includes('en-US-AriaNeural'));
@@ -64,7 +64,7 @@ describe('TTSEngine', () => {
   it('builds correct espeak command', () => {
     const TTSEngine = require('../scripts/core/tts.js');
     const tts = new TTSEngine(createMockConfig());
-    const cmd = tts._buildCommand('espeak', 'Hello', 'en', '/tmp/out.wav');
+    const cmd = tts._buildCommand('espeak', 'Hello', 'en', '/tmp/out.wav', 'en');
     assert.ok(cmd.includes('espeak'));
     assert.ok(cmd.includes('-v en'));
   });
@@ -72,7 +72,7 @@ describe('TTSEngine', () => {
   it('escapes double quotes in text for edge-tts command', () => {
     const TTSEngine = require('../scripts/core/tts.js');
     const tts = new TTSEngine(createMockConfig());
-    const cmd = tts._buildCommand('edge-tts', 'Say "hello"', 'en-US-AriaNeural', '/tmp/out.mp3');
+    const cmd = tts._buildCommand('edge-tts', 'Say "hello"', 'en-US-AriaNeural', '/tmp/out.mp3', 'en');
     // The double-quote should be escaped as \"
     assert.ok(cmd.includes('\\"hello\\"'), 'Double quotes in text should be escaped');
   });
@@ -80,7 +80,7 @@ describe('TTSEngine', () => {
   it('escapes backticks in text to prevent command substitution', () => {
     const TTSEngine = require('../scripts/core/tts.js');
     const tts = new TTSEngine(createMockConfig());
-    const cmd = tts._buildCommand('edge-tts', 'Run `ls`', 'en-US-AriaNeural', '/tmp/out.mp3');
+    const cmd = tts._buildCommand('edge-tts', 'Run `ls`', 'en-US-AriaNeural', '/tmp/out.mp3', 'en');
     assert.ok(cmd.includes('\\`'), 'Backticks in text should be escaped');
   });
 
@@ -104,7 +104,7 @@ describe('TTSEngine', () => {
     };
     const tts = new TTSEngine(mockConfig);
     // voice=null so it falls back to voice_id from config which contains $(whoami)
-    const cmd = tts._buildCommand('elevenlabs', 'Hello', null, '/tmp/out.mp3');
+    const cmd = tts._buildCommand('elevenlabs', 'Hello', null, '/tmp/out.mp3', 'en');
     // The voiceId and apiKey should have dangerous characters stripped
     assert.ok(!cmd.includes('$('), 'voiceId should not contain $() after sanitization');
     assert.ok(!cmd.includes('rm -rf'), 'apiKey should not contain shell commands after sanitization');
@@ -113,11 +113,50 @@ describe('TTSEngine', () => {
     assert.ok(cmd.includes('key'), 'safe alphanumeric part of apiKey should remain');
   });
 
+  it('uses default voice_id for ElevenLabs when per-language voice is empty', () => {
+    const TTSEngine = require('../scripts/core/tts.js');
+    const mockConfig = {
+      ...createMockConfig(),
+      get: (p) => {
+        const data = {
+          'tts.engine': 'elevenlabs',
+          'tts.fallback_engine': 'system',
+          'tts.cache_enabled': false,
+          'tts.engines.elevenlabs.api_key': 'testkey123',
+          'tts.engines.elevenlabs.voice_id': '21m00Tcm4TlvDq8ikWAM',
+          'tts.engines.elevenlabs.model_id': 'eleven_flash_v2_5',
+        };
+        return data[p];
+      },
+      // Simulates empty voices.en in default.yaml — getTTSVoice returns null
+      getTTSVoice: () => null,
+      getLanguage: () => 'en',
+    };
+    const tts = new TTSEngine(mockConfig);
+    // _resolveVoice should return null (not 'en'), so _buildCommand falls through to voice_id
+    const voice = tts._resolveVoice('elevenlabs', 'en');
+    assert.strictEqual(voice, null, '_resolveVoice should return null, not the language code');
+    const cmd = tts._buildCommand('elevenlabs', 'Hello', voice, '/tmp/out.mp3', 'en');
+    assert.ok(cmd.includes('21m00Tcm4TlvDq8ikWAM'), 'Should use default voice_id, not language code');
+    assert.ok(!cmd.includes('/v1/text-to-speech/en'), 'Should NOT use bare language code as voice ID');
+  });
+
+  it('falls back to lang for edge-tts when voice is null', () => {
+    const TTSEngine = require('../scripts/core/tts.js');
+    const mockConfig = {
+      ...createMockConfig(),
+      getTTSVoice: () => null,
+    };
+    const tts = new TTSEngine(mockConfig);
+    const cmd = tts._buildCommand('edge-tts', 'Hello', null, '/tmp/out.mp3', 'en');
+    assert.ok(cmd.includes('--voice "en"'), 'Should fall back to lang when voice is null');
+  });
+
   it('throws for unknown TTS engine', () => {
     const TTSEngine = require('../scripts/core/tts.js');
     const tts = new TTSEngine(createMockConfig());
     assert.throws(
-      () => tts._buildCommand('unknown-engine', 'Hello', 'en', '/tmp/out.mp3'),
+      () => tts._buildCommand('unknown-engine', 'Hello', 'en', '/tmp/out.mp3', 'en'),
       /Unknown TTS engine/,
     );
   });
@@ -127,7 +166,7 @@ describe('TTSEngine', () => {
     const tts = new TTSEngine(createMockConfig());
     // A literal newline inside a double-quoted shell argument terminates the argument
     // on most shells. It must be replaced with a space.
-    const cmd = tts._buildCommand('edge-tts', 'Hello\nWorld', 'en-US-AriaNeural', '/tmp/out.mp3');
+    const cmd = tts._buildCommand('edge-tts', 'Hello\nWorld', 'en-US-AriaNeural', '/tmp/out.mp3', 'en');
     assert.ok(!cmd.includes('\n'), 'Newlines must not appear in the shell command');
     assert.ok(cmd.includes('Hello World'), 'Newline should be replaced with a space');
   });
@@ -135,7 +174,7 @@ describe('TTSEngine', () => {
   it('replaces carriage-return+newline with a space', () => {
     const TTSEngine = require('../scripts/core/tts.js');
     const tts = new TTSEngine(createMockConfig());
-    const cmd = tts._buildCommand('edge-tts', 'Hello\r\nWorld', 'en-US-AriaNeural', '/tmp/out.mp3');
+    const cmd = tts._buildCommand('edge-tts', 'Hello\r\nWorld', 'en-US-AriaNeural', '/tmp/out.mp3', 'en');
     assert.ok(!cmd.includes('\r') && !cmd.includes('\n'), 'CR/LF must not appear in the shell command');
   });
 

@@ -42,9 +42,9 @@ class PomodoroTimer {
     this._saveStatus();
   }
 
-  skip() {
-    if (this._phase === 'work') { this._onWorkEnd(); }
-    else if (this._phase === 'short_break' || this._phase === 'long_break') { this._onBreakEnd(); }
+  async skip() {
+    if (this._phase === 'work') { await this._onWorkEnd(); }
+    else if (this._phase === 'short_break' || this._phase === 'long_break') { await this._onBreakEnd(); }
   }
 
   pause() {

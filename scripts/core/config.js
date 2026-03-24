@@ -27,7 +27,11 @@ class Config {
   }
 
   getTTSVoice(engine, lang) {
-    const voices = this.get(`tts.engines.${engine}.voices`);
+    let voices = this.get(`tts.engines.${engine}.voices`);
+    // The system engine stores macOS voices under 'macos_voices'
+    if (!voices && engine === 'system' && process.platform === 'darwin') {
+      voices = this.get('tts.engines.system.macos_voices');
+    }
     if (!voices) return null;
     return voices[lang] || voices['en'] || null;
   }

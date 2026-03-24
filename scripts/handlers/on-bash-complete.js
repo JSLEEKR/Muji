@@ -54,7 +54,11 @@ function commandMatchesPattern(command, pattern) {
     // Use word-boundary matching: the pattern must appear at start of command
     // or after whitespace/semicolon/pipe to avoid matching substrings (e.g. "make" in "cmake")
     if (commandMatchesPattern(command, bc)) {
-      if (stderr && (stderr.includes('error') || stderr.includes('Error'))) {
+      const exitCode = input?.tool_response?.exit_code;
+      const hasFail = exitCode !== undefined
+        ? exitCode !== 0
+        : stderr && (stderr.includes('error') || stderr.includes('Error'));
+      if (hasFail) {
         await notifier.notify('build_fail');
       } else { await notifier.notify('build_success'); }
       return;

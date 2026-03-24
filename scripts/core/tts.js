@@ -25,7 +25,7 @@ class TTSEngine {
     const ext = this._engine === 'espeak' ? 'wav' : 'mp3';
     const outPath = path.join(os.tmpdir(), `muji-tts-${Date.now()}.${ext}`);
     try {
-      const cmd = this._buildCommand(this._engine, text, voice, outPath);
+      const cmd = this._buildCommand(this._engine, text, voice, outPath, lang);
       execSync(cmd, { timeout: 15000, stdio: 'pipe' });
       if (this._cacheEnabled && fs.existsSync(outPath)) {
         this._saveToCache(outPath, text, this._engine, voice);
@@ -36,7 +36,7 @@ class TTSEngine {
       if (this._fallback && this._fallback !== this._engine) {
         const fbVoice = this._resolveVoice(this._fallback, lang);
         try {
-          const cmd = this._buildCommand(this._fallback, text, fbVoice, outPath);
+          const cmd = this._buildCommand(this._fallback, text, fbVoice, outPath, lang);
           execSync(cmd, { timeout: 15000, stdio: 'pipe' });
           return outPath;
         } catch (fbErr) {
@@ -68,7 +68,7 @@ class TTSEngine {
     const outPath = path.join(os.tmpdir(), `muji-tts-test-${Date.now()}.mp3`);
     const voice = this._resolveVoice(engine, 'en');
     try {
-      const cmd = this._buildCommand(engine, testText, voice, outPath);
+      const cmd = this._buildCommand(engine, testText, voice, outPath, 'en');
       execSync(cmd, { timeout: 10000, stdio: 'pipe' });
       const exists = fs.existsSync(outPath);
       try { fs.unlinkSync(outPath); } catch { }
@@ -77,10 +77,10 @@ class TTSEngine {
   }
 
   _resolveVoice(engine, lang) {
-    return this._config.getTTSVoice(engine, lang) || lang;
+    return this._config.getTTSVoice(engine, lang) || null;
   }
 
-  _buildCommand(engine, text, voice, outPath) {
+  _buildCommand(engine, text, voice, outPath, lang) {
     // Sanitize text for safe embedding in shell double-quoted strings.
     // Escape backslash first, then double-quote, then $ and backtick (Unix shell expansion).
     // Replace newlines/carriage-returns with a space — a literal newline inside a
@@ -93,7 +93,7 @@ class TTSEngine {
       .replace(/\r?\n|\r/g, ' ');
     switch (engine) {
       case 'edge-tts':
-        return `edge-tts --voice "${voice}" --text "${safeText}" --write-media "${outPath}"`;
+        return `edge-tts --voice "${voice || lang}" --text "${safeText}" --write-media "${outPath}"`;
       case 'elevenlabs': {
         const apiKey = this._config.get('tts.engines.elevenlabs.api_key') || process.env.ELEVENLABS_API_KEY || '';
         const voiceId = voice || this._config.get('tts.engines.elevenlabs.voice_id') || '';
@@ -111,13 +111,13 @@ class TTSEngine {
         return `tts --text "${safeText}" --model_name "${model}" --out_path "${outPath}"`;
       }
       case 'espeak':
-        return `espeak-ng -v ${voice} -w "${outPath}" "${safeText}"`;
+        return `espeak-ng -v ${voice || lang} -w "${outPath}" "${safeText}"`;
       case 'system':
         if (process.platform === 'darwin') {
           const aiffPath = outPath.replace(/\.\w+$/, '.aiff');
-          return `say -v "${voice}" -o "${aiffPath}" "${safeText}" && ffmpeg -y -i "${aiffPath}" "${outPath}" 2>/dev/null && rm -f "${aiffPath}"`;
+          return `say -v "${voice || lang}" -o "${aiffPath}" "${safeText}" && ffmpeg -y -i "${aiffPath}" "${outPath}" 2>/dev/null && rm -f "${aiffPath}"`;
         }
-        return `pico2wave -l ${voice} -w "${outPath}" "${safeText}" 2>/dev/null || espeak-ng -v ${voice} -w "${outPath}" "${safeText}"`;
+        return `pico2wave -l ${voice || lang} -w "${outPath}" "${safeText}" 2>/dev/null || espeak-ng -v ${voice || lang} -w "${outPath}" "${safeText}"`;
       default:
         throw new Error(`Unknown TTS engine: ${engine}`);
     }
