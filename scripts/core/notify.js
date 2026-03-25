@@ -14,24 +14,22 @@ class Notifier {
   async notify(event, vars = {}) {
     if (!this._config.get('notifications.enabled')) return;
     const sfxPath = this._config.getSFXPath(event);
+    const voicePath = this._getVoicePath(event);
     const message = this._resolveMessage(event, vars);
-    if (!sfxPath && !message) return;
+    if (!sfxPath && !voicePath && !message) return;
     return this._queueNotification(async () => {
       await this._duckAndRestore(async () => {
         if (sfxPath && fs.existsSync(sfxPath)) {
           await this._playSFX(sfxPath);
         }
-        if (message) {
-          // Try pre-recorded voice file first, fall back to TTS
-          const voicePath = this._getVoicePath(event);
-          if (voicePath) {
-            await this._playAudio(voicePath);
-          } else {
-            const lang = this._config.getLanguage();
-            const audioFile = await this._tts.synthesize(message, lang);
-            if (audioFile) {
-              await this._playAudio(audioFile);
-            }
+        // Priority: pre-recorded voice > TTS synthesis
+        if (voicePath) {
+          await this._playAudio(voicePath);
+        } else if (message) {
+          const lang = this._config.getLanguage();
+          const audioFile = await this._tts.synthesize(message, lang);
+          if (audioFile) {
+            await this._playAudio(audioFile);
           }
         }
       });
@@ -63,20 +61,24 @@ class Notifier {
   }
 
   /**
-   * Notify with dynamic project-aware message via TTS (ignores pre-recorded files).
-   * Used for session_start/session_end when dynamic_project_name is enabled.
+   * Notify with dynamic project-aware message via TTS.
+   * Tries pre-recorded voice first; falls back to TTS with {project} variable.
    */
   async notifyDynamic(event, vars = {}) {
     if (!this._config.get('notifications.enabled')) return;
     const sfxPath = this._config.getSFXPath(event);
+    const voicePath = this._getVoicePath(event);
     const message = this._resolveMessage(event, vars);
-    if (!sfxPath && !message) return;
+    if (!sfxPath && !voicePath && !message) return;
     return this._queueNotification(async () => {
       await this._duckAndRestore(async () => {
         if (sfxPath && fs.existsSync(sfxPath)) {
           await this._playSFX(sfxPath);
         }
-        if (message) {
+        // Priority: pre-recorded voice > dynamic TTS
+        if (voicePath) {
+          await this._playAudio(voicePath);
+        } else if (message) {
           const lang = this._config.getLanguage();
           const audioFile = await this._tts.synthesize(message, lang);
           if (audioFile) { await this._playAudio(audioFile); }

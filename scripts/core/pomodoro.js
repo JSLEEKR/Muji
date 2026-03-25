@@ -19,6 +19,8 @@ class PomodoroTimer {
     this._hourlyTimer = null;
     this._idleTimer = null;
     this._idleNotified = false;
+    // Memory optimization: cache last status to avoid unnecessary disk writes
+    this._lastStatusJson = '';
   }
 
   start() {
@@ -100,7 +102,8 @@ class PomodoroTimer {
     const hourlyEnabled = this._config.get('wellness.hourly.enabled') !== false;
     const idleEnabled = this._config.get('wellness.idle.enabled') !== false;
     const hourlyMs = ((this._config.get('wellness.hourly.interval_minutes')) || 60) * 60 * 1000;
-    const idleCheckMs = 60 * 1000; // check every minute
+    // Check idle every 5 minutes instead of every minute (reduces file I/O)
+    const idleCheckMs = 5 * 60 * 1000;
 
     if (hourlyEnabled) {
       this._hourlyTimer = setInterval(() => this._onHourlyChime(), hourlyMs);
@@ -152,7 +155,6 @@ class PomodoroTimer {
         await this._notifier.notify(pick);
       }
     } else if (elapsed < thresholdMs) {
-      // User became active again, reset so we can notify again next idle period
       this._idleNotified = false;
     }
   }
@@ -220,7 +222,11 @@ class PomodoroTimer {
   _saveStatus() {
     try {
       const statusPath = this._config.getStatusPath();
-      fs.writeFileSync(statusPath, JSON.stringify(this.status(), null, 2));
+      const json = JSON.stringify(this.status(), null, 2);
+      // Skip disk write if status hasn't changed
+      if (json === this._lastStatusJson) return;
+      this._lastStatusJson = json;
+      fs.writeFileSync(statusPath, json);
     } catch { }
   }
 
@@ -246,15 +252,25 @@ if (require.main === module) {
   const notifier = new Notifier(config, bgm, tts);
   const timer = new PomodoroTimer(config, notifier, bgm);
   const action = process.argv[2];
+
+  // Graceful shutdown — clean up PID and timers
+  function shutdown() {
+    timer.stopWellness();
+    timer.stop();
+    process.exit(0);
+  }
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
+
   if (action === 'start') {
     timer._savePID(); timer.start();
-    // Always start wellness monitoring alongside pomodoro daemon
     timer.startWellness();
-    setInterval(() => timer._saveStatus(), 5000);
+    // Save status every 30 seconds instead of 5 (reduces disk I/O 6x)
+    setInterval(() => timer._saveStatus(), 30000);
   } else if (action === 'wellness') {
-    // Wellness-only mode: no pomodoro timer, just hourly/idle alerts
     timer._savePID();
     timer.startWellness();
-    setInterval(() => {}, 60000); // keep process alive
+    // Keep alive with minimal overhead
+    setInterval(() => {}, 300000);
   }
 }

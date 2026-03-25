@@ -8,6 +8,8 @@ describe('Config', () => {
   it('loads default config from config/default.yaml', () => {
     const Config = require('../scripts/core/config.js');
     const config = new Config();
+    // Skip user config to test defaults only
+    config._loadUser = () => null;
     const cfg = config.load();
 
     assert.strictEqual(cfg.language, 'en');
@@ -31,6 +33,7 @@ describe('Config', () => {
   it('returns correct language', () => {
     const Config = require('../scripts/core/config.js');
     const config = new Config();
+    config._loadUser = () => null;
     config.load();
     assert.strictEqual(config.getLanguage(), 'en');
   });
