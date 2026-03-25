@@ -23,9 +23,16 @@ class BGMManager {
       this._currentMode = mode;
       return;
     }
-    await this._stopGlobal();
-    await this._spawnMpv(sources[0]);
-    this._currentMode = mode;
+    // Lock covers the entire stop→spawn sequence to prevent race conditions
+    let lockFd = null;
+    try {
+      lockFd = this._acquireLock();
+      await this._killExisting();
+      await this._spawnMpv(sources[0]);
+      this._currentMode = mode;
+    } finally {
+      this._releaseLock(lockFd);
+    }
   }
 
   async stop() {
@@ -40,14 +47,19 @@ class BGMManager {
   }
 
   async switchMode(mode) {
-    await this._stopGlobal();
     await this.start(mode);
   }
 
   async playUrl(url) {
-    await this._stopGlobal();
-    await this._spawnMpv(url);
-    this._currentMode = 'custom';
+    let lockFd = null;
+    try {
+      lockFd = this._acquireLock();
+      await this._killExisting();
+      await this._spawnMpv(url);
+      this._currentMode = 'custom';
+    } finally {
+      this._releaseLock(lockFd);
+    }
   }
 
   async setVolume(level) {
@@ -109,38 +121,31 @@ class BGMManager {
   }
 
   /**
-   * Stop any globally running mpv BGM process with exclusive locking
-   * to prevent race conditions across multiple Claude Code windows.
+   * Kill any existing mpv process (local + global via PID file).
+   * Must be called while holding the lock.
    */
-  async _stopGlobal() {
-    let lockFd = null;
-    try {
-      lockFd = this._acquireLock();
-
-      // Kill our own local process
-      if (this._process) {
-        try { this._process.kill(); } catch { /* already exited */ }
-        this._process = null;
-      }
-
-      // Kill global process via PID file
-      const pid = this._readPid();
-      if (pid !== null && this._isProcessAlive(pid)) {
-        try { process.kill(pid); } catch { /* already exited */ }
-        // Wait briefly for process to actually terminate
-        for (let i = 0; i < 10; i++) {
-          if (!this._isProcessAlive(pid)) break;
-          await this._sleep(100);
-        }
-      }
-
-      this._cleanupPid();
-      this._cleanup();
-      this._currentMode = null;
-      this._restartAttempted = false;
-    } finally {
-      this._releaseLock(lockFd);
+  async _killExisting() {
+    // Kill our own local process
+    if (this._process) {
+      try { this._process.kill(); } catch { /* already exited */ }
+      this._process = null;
     }
+
+    // Kill global process via PID file
+    const pid = this._readPid();
+    if (pid !== null && this._isProcessAlive(pid)) {
+      try { process.kill(pid); } catch { /* already exited */ }
+      // Wait for process to actually terminate
+      for (let i = 0; i < 10; i++) {
+        if (!this._isProcessAlive(pid)) break;
+        await this._sleep(100);
+      }
+    }
+
+    this._cleanupPid();
+    this._cleanup();
+    this._currentMode = null;
+    this._restartAttempted = false;
   }
 
   _acquireLock() {

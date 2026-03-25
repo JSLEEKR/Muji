@@ -135,12 +135,12 @@ describe('BGMManager', () => {
     assert.strictEqual(mgr._readPid(), null);
   });
 
-  it('_stopGlobal cleans up PID file', async () => {
+  it('_killExisting cleans up PID file', async () => {
     const BGMManager = require('../scripts/core/bgm.js');
     const mgr = new BGMManager(createMockConfig());
     // Write a stale PID
     fs.writeFileSync(testPidPath, '999999999', 'utf8');
-    await mgr._stopGlobal();
+    await mgr._killExisting();
     assert.strictEqual(fs.existsSync(testPidPath), false);
   });
 });
