@@ -22,7 +22,6 @@ class Notifier {
         if (sfxPath && fs.existsSync(sfxPath)) {
           await this._playSFX(sfxPath);
         }
-        // Priority: pre-recorded voice > TTS synthesis
         if (voicePath) {
           await this._playAudio(voicePath);
         } else if (message) {
@@ -61,8 +60,8 @@ class Notifier {
   }
 
   /**
-   * Notify with dynamic project-aware message via TTS.
-   * Tries pre-recorded voice first; falls back to TTS with {project} variable.
+   * Dynamic project-aware notification.
+   * Plays: SFX → edge-tts project name → pre-recorded ElevenLabs voice
    */
   async notifyDynamic(event, vars = {}) {
     if (!this._config.get('notifications.enabled')) return;
@@ -75,7 +74,17 @@ class Notifier {
         if (sfxPath && fs.existsSync(sfxPath)) {
           await this._playSFX(sfxPath);
         }
-        // Priority: pre-recorded voice > dynamic TTS
+        // 1. Project name tag via edge-tts (free, dynamic)
+        const project = vars.project;
+        if (project) {
+          const lang = this._config.getLanguage();
+          const tagText = this._getProjectTag(project, lang);
+          const tagAudio = await this._tts.synthesize(tagText, lang);
+          if (tagAudio) {
+            await this._playAudio(tagAudio);
+          }
+        }
+        // 2. Pre-recorded ElevenLabs voice (or TTS fallback)
         if (voicePath) {
           await this._playAudio(voicePath);
         } else if (message) {
@@ -87,19 +96,24 @@ class Notifier {
     });
   }
 
+  _getProjectTag(project, lang) {
+    const tags = {
+      ko: `${project} 프로젝트.`,
+      ja: `${project}プロジェクト。`,
+      zh: `${project}项目。`,
+    };
+    return tags[lang] || `${project} project.`;
+  }
+
   _resolveMessage(event, vars) {
     const lang = this._config.getLanguage();
     return this._config.getMessage(event, lang, vars);
   }
 
-  /**
-   * Check for pre-recorded voice file at sounds/voices/{lang}/{event}.mp3
-   */
   _getVoicePath(event) {
     const lang = this._config.getLanguage();
     const voicePath = path.join(this._config.getPluginDir(), 'sounds', 'voices', lang, `${event}.mp3`);
     if (fs.existsSync(voicePath)) return voicePath;
-    // Fallback to English
     if (lang !== 'en') {
       const enPath = path.join(this._config.getPluginDir(), 'sounds', 'voices', 'en', `${event}.mp3`);
       if (fs.existsSync(enPath)) return enPath;

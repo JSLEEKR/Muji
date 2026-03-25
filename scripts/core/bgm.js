@@ -11,6 +11,7 @@ class BGMManager {
     this._socketPath = config.getSocketPath();
     this._mpvPath = config.getMpvPath();
     this._pidPath = config.getBgmPidPath();
+    this._lockPath = config.getBgmPidPath() + '.lock';
     this._restartAttempted = false;
   }
 
@@ -22,7 +23,6 @@ class BGMManager {
       this._currentMode = mode;
       return;
     }
-    // Kill any existing global mpv process (from this or other windows)
     await this._stopGlobal();
     await this._spawnMpv(sources[0]);
     this._currentMode = mode;
@@ -94,9 +94,6 @@ class BGMManager {
     return this._process !== null && !this._process.killed;
   }
 
-  /**
-   * Check if another mpv BGM process is running globally (from any window).
-   */
   isPlayingGlobal() {
     const pid = this._readPid();
     if (pid === null) return false;
@@ -112,23 +109,67 @@ class BGMManager {
   }
 
   /**
-   * Stop any globally running mpv BGM process (from this or another window).
+   * Stop any globally running mpv BGM process with exclusive locking
+   * to prevent race conditions across multiple Claude Code windows.
    */
   async _stopGlobal() {
-    // First stop our own local process if any
-    if (this._process) {
-      try { this._process.kill(); } catch { /* already exited */ }
-      this._process = null;
+    let lockFd = null;
+    try {
+      lockFd = this._acquireLock();
+
+      // Kill our own local process
+      if (this._process) {
+        try { this._process.kill(); } catch { /* already exited */ }
+        this._process = null;
+      }
+
+      // Kill global process via PID file
+      const pid = this._readPid();
+      if (pid !== null && this._isProcessAlive(pid)) {
+        try { process.kill(pid); } catch { /* already exited */ }
+        // Wait briefly for process to actually terminate
+        for (let i = 0; i < 10; i++) {
+          if (!this._isProcessAlive(pid)) break;
+          await this._sleep(100);
+        }
+      }
+
+      this._cleanupPid();
+      this._cleanup();
+      this._currentMode = null;
+      this._restartAttempted = false;
+    } finally {
+      this._releaseLock(lockFd);
     }
-    // Then kill any orphaned global process via PID file
-    const pid = this._readPid();
-    if (pid !== null && this._isProcessAlive(pid)) {
-      try { process.kill(pid); } catch { /* already exited */ }
+  }
+
+  _acquireLock() {
+    try {
+      const fd = fs.openSync(this._lockPath, 'wx');
+      fs.writeSync(fd, String(process.pid));
+      return fd;
+    } catch {
+      // Lock exists — check if holder is still alive (stale lock detection)
+      try {
+        const holderPid = parseInt(fs.readFileSync(this._lockPath, 'utf8').trim(), 10);
+        if (!isNaN(holderPid) && !this._isProcessAlive(holderPid)) {
+          try { fs.unlinkSync(this._lockPath); } catch { }
+          try {
+            const fd = fs.openSync(this._lockPath, 'wx');
+            fs.writeSync(fd, String(process.pid));
+            return fd;
+          } catch { return null; }
+        }
+      } catch { }
+      return null;
     }
-    this._cleanupPid();
-    this._cleanup();
-    this._currentMode = null;
-    this._restartAttempted = false;
+  }
+
+  _releaseLock(fd) {
+    if (fd !== null) {
+      try { fs.closeSync(fd); } catch { }
+    }
+    try { fs.unlinkSync(this._lockPath); } catch { }
   }
 
   _readPid() {
@@ -143,19 +184,23 @@ class BGMManager {
 
   _writePid(pid) {
     try {
-      fs.writeFileSync(this._pidPath, String(pid), 'utf8');
+      // Atomic write: temp file → rename
+      const tmpPath = this._pidPath + '.tmp';
+      fs.writeFileSync(tmpPath, String(pid), 'utf8');
+      fs.renameSync(tmpPath, this._pidPath);
     } catch {
-      /* best-effort */
+      try { fs.writeFileSync(this._pidPath, String(pid), 'utf8'); } catch { }
     }
   }
 
   _cleanupPid() {
-    try { fs.unlinkSync(this._pidPath); } catch { /* not present */ }
+    try { fs.unlinkSync(this._pidPath); } catch { }
+    try { fs.unlinkSync(this._pidPath + '.tmp'); } catch { }
   }
 
   _isProcessAlive(pid) {
     try {
-      process.kill(pid, 0); // signal 0 = existence check
+      process.kill(pid, 0);
       return true;
     } catch {
       return false;
@@ -172,7 +217,6 @@ class BGMManager {
     ];
     return new Promise((resolve, reject) => {
       try {
-        // Extend PATH so mpv can find yt-dlp on Windows
         const env = { ...process.env };
         if (process.platform === 'win32') {
           const pyScripts = this._config.get('advanced.python_scripts_dir');
@@ -182,7 +226,6 @@ class BGMManager {
         }
         this._process = spawn(this._mpvPath, args, { stdio: 'ignore', detached: true, env });
         this._process.unref();
-        // Write PID file for cross-window singleton
         if (this._process.pid) {
           this._writePid(this._process.pid);
         }
