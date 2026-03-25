@@ -11,6 +11,19 @@ const { bootstrap } = require('./_bootstrap.js');
   } else {
     await notifier.notify('session_end');
   }
+  // Kill global mpv via PID file (bgm.stop() only kills local _process which is null here)
+  const bgmPidPath = config.getBgmPidPath();
+  try {
+    if (fs.existsSync(bgmPidPath)) {
+      const bgmPid = parseInt(fs.readFileSync(bgmPidPath, 'utf8').trim(), 10);
+      if (!isNaN(bgmPid)) {
+        try { process.kill(bgmPid); } catch { }
+      }
+      fs.unlinkSync(bgmPidPath);
+    }
+  } catch { }
+  try { fs.unlinkSync(bgmPidPath + '.lock'); } catch { }
+  try { fs.unlinkSync(bgmPidPath + '.tmp'); } catch { }
   await bgm.stop();
   const pidPath = config.getPidPath();
   try {
