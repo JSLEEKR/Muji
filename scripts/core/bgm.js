@@ -148,26 +148,38 @@ class BGMManager {
     this._restartAttempted = false;
   }
 
+  /**
+   * Acquire exclusive lock with retry. Blocks until lock is obtained
+   * or max retries exceeded (max ~3 seconds wait).
+   */
   _acquireLock() {
+    for (let attempt = 0; attempt < 30; attempt++) {
+      try {
+        const fd = fs.openSync(this._lockPath, 'wx');
+        fs.writeSync(fd, String(process.pid));
+        return fd;
+      } catch {
+        // Lock file exists — check if holder is still alive
+        try {
+          const holderPid = parseInt(fs.readFileSync(this._lockPath, 'utf8').trim(), 10);
+          if (!isNaN(holderPid) && !this._isProcessAlive(holderPid)) {
+            // Stale lock from dead process — remove and retry immediately
+            try { fs.unlinkSync(this._lockPath); } catch { }
+            continue;
+          }
+        } catch { }
+        // Holder is alive — wait 100ms and retry
+        const start = Date.now();
+        while (Date.now() - start < 100) { /* busy wait */ }
+      }
+    }
+    // Fallback: force remove stale lock after all retries exhausted
+    try { fs.unlinkSync(this._lockPath); } catch { }
     try {
       const fd = fs.openSync(this._lockPath, 'wx');
       fs.writeSync(fd, String(process.pid));
       return fd;
-    } catch {
-      // Lock exists — check if holder is still alive (stale lock detection)
-      try {
-        const holderPid = parseInt(fs.readFileSync(this._lockPath, 'utf8').trim(), 10);
-        if (!isNaN(holderPid) && !this._isProcessAlive(holderPid)) {
-          try { fs.unlinkSync(this._lockPath); } catch { }
-          try {
-            const fd = fs.openSync(this._lockPath, 'wx');
-            fs.writeSync(fd, String(process.pid));
-            return fd;
-          } catch { return null; }
-        }
-      } catch { }
-      return null;
-    }
+    } catch { return null; }
   }
 
   _releaseLock(fd) {
