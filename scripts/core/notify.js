@@ -1,6 +1,9 @@
 const { spawn } = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+
+const PROJECT_CHIME_COUNT = 8;
 
 class Notifier {
   constructor(config, bgmManager, ttsEngine) {
@@ -36,8 +39,35 @@ class Notifier {
   }
 
   /**
-   * Play a pre-recorded voice file directly (for hourly/idle messages).
+   * Project-aware notification.
+   * Plays: project-unique chime (louder) → pre-recorded ElevenLabs voice
+   * Each project gets a consistent chime based on its name hash.
    */
+  async notifyProject(event, project) {
+    if (!this._config.get('notifications.enabled')) return;
+    const voicePath = this._getVoicePath(event);
+    const message = this._resolveMessage(event, {});
+    if (!voicePath && !message) return;
+    return this._queueNotification(async () => {
+      await this._duckAndRestore(async () => {
+        // 1. Project-unique chime (louder than normal SFX)
+        const chimePath = this._getProjectChime(project);
+        if (chimePath) {
+          const chimeVolume = (this._config.get('sfx.volume') ?? 80) + 15;
+          await this._playAudio(chimePath, Math.min(chimeVolume, 100));
+        }
+        // 2. Pre-recorded ElevenLabs voice (or TTS fallback)
+        if (voicePath) {
+          await this._playAudio(voicePath);
+        } else if (message) {
+          const lang = this._config.getLanguage();
+          const audioFile = await this._tts.synthesize(message, lang);
+          if (audioFile) { await this._playAudio(audioFile); }
+        }
+      });
+    });
+  }
+
   async notifyVoice(voiceFile) {
     if (!this._config.get('notifications.enabled')) return;
     if (!fs.existsSync(voiceFile)) return;
@@ -59,55 +89,21 @@ class Notifier {
     if (audioFile) { await this._playAudio(audioFile); }
   }
 
-  /**
-   * Dynamic project-aware notification.
-   * Plays: SFX → edge-tts project name → pre-recorded ElevenLabs voice
-   */
-  async notifyDynamic(event, vars = {}) {
-    if (!this._config.get('notifications.enabled')) return;
-    const sfxPath = this._config.getSFXPath(event);
-    const voicePath = this._getVoicePath(event);
-    const message = this._resolveMessage(event, vars);
-    if (!sfxPath && !voicePath && !message) return;
-    return this._queueNotification(async () => {
-      await this._duckAndRestore(async () => {
-        if (sfxPath && fs.existsSync(sfxPath)) {
-          await this._playSFX(sfxPath);
-        }
-        // 1. Project name tag via edge-tts (free, dynamic)
-        const project = vars.project;
-        if (project) {
-          const lang = this._config.getLanguage();
-          const tagText = this._getProjectTag(project, lang);
-          const tagAudio = await this._tts.synthesize(tagText, lang);
-          if (tagAudio) {
-            await this._playAudio(tagAudio);
-          }
-        }
-        // 2. Pre-recorded ElevenLabs voice (or TTS fallback)
-        if (voicePath) {
-          await this._playAudio(voicePath);
-        } else if (message) {
-          const lang = this._config.getLanguage();
-          const audioFile = await this._tts.synthesize(message, lang);
-          if (audioFile) { await this._playAudio(audioFile); }
-        }
-      });
-    });
-  }
-
-  _getProjectTag(project, lang) {
-    const tags = {
-      ko: `${project} 프로젝트.`,
-      ja: `${project}プロジェクト。`,
-      zh: `${project}项目。`,
-    };
-    return tags[lang] || `${project} project.`;
-  }
-
   _resolveMessage(event, vars) {
     const lang = this._config.getLanguage();
     return this._config.getMessage(event, lang, vars);
+  }
+
+  /**
+   * Get a consistent chime file for a project name.
+   * Hash maps project name → one of 8 pitch-shifted chimes.
+   */
+  _getProjectChime(project) {
+    const hash = crypto.createHash('md5').update(project).digest();
+    const index = (hash[0] % PROJECT_CHIME_COUNT) + 1;
+    const chimePath = path.join(this._config.getPluginDir(), 'sounds', 'project-chimes', `chime-${index}.wav`);
+    if (fs.existsSync(chimePath)) return chimePath;
+    return null;
   }
 
   _getVoicePath(event) {

@@ -4,13 +4,8 @@ const { bootstrap } = require('./_bootstrap.js');
 
 (async () => {
   const { config, bgm, notifier } = bootstrap();
-  const useDynamic = config.get('notifications.dynamic_project_name');
-  if (useDynamic) {
-    const project = path.basename(process.cwd());
-    await notifier.notifyDynamic('session_end', { project });
-  } else {
-    await notifier.notify('session_end');
-  }
+  const project = path.basename(process.cwd());
+  await notifier.notifyProject('session_end', project);
   // Kill global mpv via PID file (bgm.stop() only kills local _process which is null here)
   const bgmPidPath = config.getBgmPidPath();
   try {
