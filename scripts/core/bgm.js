@@ -266,6 +266,20 @@ class BGMManager {
           }
           this._process = null;
           this._cleanupPid();
+          // Auto-restart if mpv exited unexpectedly while a mode is active
+          if (this._currentMode && this._currentMode !== 'silence') {
+            const restartSource = source;
+            const delay = code === 0 ? 1000 : 3000;
+            setTimeout(() => {
+              // Guard: only restart if still expected to be playing
+              if (this._currentMode && !this._process) {
+                console.warn(`[Muji] mpv exited unexpectedly, restarting BGM...`);
+                this._spawnMpv(restartSource).catch((err) => {
+                  console.error('[Muji] BGM auto-restart failed:', err.message);
+                });
+              }
+            }, delay);
+          }
         });
         setTimeout(resolve, 500);
       } catch (err) {
