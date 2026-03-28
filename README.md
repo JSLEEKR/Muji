@@ -44,7 +44,7 @@ Stop coding in silence. Let the vibes sync to you.
 You start a Claude Code session
         ↓
 🎵 Lo-Fi music begins playing automatically
-🔊 "Let's get started." (TTS greeting)
+🔊 "Alright, starting up." (TTS greeting)
         ↓
 You code normally — Claude Code does its thing
         ↓
@@ -52,7 +52,7 @@ You code normally — Claude Code does its thing
 │  Claude runs `git push`                                 │
 │  → BGM fades from 30 → 10 (ducking)                    │
 │  → 🔔 success-big.wav plays                            │
-│  → 🔊 "Push complete." (TTS)                           │
+│  → 🔊 "Pushed." (TTS)                                   │
 │  → BGM fades from 10 → 30 (restore)                    │
 └─────────────────────────────────────────────────────────┘
         ↓
@@ -235,7 +235,7 @@ Dispatch background research tasks to the `research-mate` subagent.
 1. The subagent launches in a separate context
 2. It searches the web and summarizes findings
 3. Results are saved to `/tmp/muji-research-output.md`
-4. When done, you hear a knock sound + "Research is ready."
+4. When done, you hear a knock sound + "Research done. Check it out."
 5. Ask Claude about the results or read the file directly
 
 ---
@@ -255,20 +255,20 @@ All notifications are **queued sequentially** — no overlapping audio.
 
 | Event | Trigger | SFX | TTS (en) | TTS (ko) |
 |-------|---------|-----|----------|----------|
-| Session start | Claude Code opens | `chime-soft.wav` | "Let's get started." | "같이 시작해볼까?" |
+| Session start | Claude Code opens | `chime-soft.wav` | "Alright, starting up." | "자, 시작하자." |
 | Git commit | `git commit` succeeds | `success.wav` | — | — |
-| Git push | `git push` succeeds | `success-big.wav` | "Push complete." | "푸시 완료!" |
+| Git push | `git push` succeeds | `success-big.wav` | "Pushed." | "푸시 완료." |
 | Test failure | Test runner fails | `warn-soft.wav` | "{count} tests failed." | "테스트 {count}개 실패했어." |
-| Build success | Build completes | `success.wav` | "Build complete, no errors." | "빌드 끝났어, 에러 없어." |
-| Build failure | Build errors | `error.wav` | "Build failed. Check the output." | "빌드 실패했어. 확인해봐." |
+| Build success | Build completes | `success.wav` | "Build passed." | "빌드 성공." |
+| Build failure | Build errors | `error.wav` | "Build failed. Check the logs." | "빌드 실패. 로그 확인해봐." |
 | Lint error | Linter issues | `warn-soft.wav` | — | — |
-| Subagent done | Research completes | `knock.wav` | "Research is ready." | "리서치 정리해뒀어." |
+| Subagent done | Research completes | `knock.wav` | "Research done. Check it out." | "조사 끝났어. 확인해봐." |
 | Pomodoro end | 25 min up | `bell.wav` | "25 minutes up. Take a break." | "25분 지났어, 쉬어가자." |
 | 5-min warning | 5 min remaining | `tick.wav` | "5 minutes left." | "5분 남았어." |
-| Break end | Break over | `bell-soft.wav` | "Break's over. Ready to continue?" | "다시 시작할까?" |
-| Task done | Task completed | `success.wav` | "Task done." | "작업 끝났어." |
-| Session end | Claude Code closes | `chime-soft.wav` | "Good work today." | "오늘 수고했어." |
-| Error | Generic error | `error.wav` | "An error occurred." | "에러 발생했어." |
+| Break end | Break over | `bell-soft.wav` | "Ready to get back to it?" | "쉬었으면 다시 해볼까?" |
+| Task done | Task completed | `success.wav` | "One down. Moving on." | "하나 끝. 다음 가자." |
+| Session end | Claude Code closes | `chime-soft.wav` | "Work wrapped up." | "작업 마무리됐어." |
+| Error | Generic error | `error.wav` | "Got an error. Take a look." | "에러 났어. 한번 봐봐." |
 
 ### Command Pattern Detection
 
@@ -576,7 +576,7 @@ muji/
 │   └── tick.wav                 # 5-min warning (1kHz, 0.05s)
 ├── config/
 │   └── default.yaml             # Full default configuration
-├── tests/                       # 48 unit tests (node:test)
+├── tests/                       # 65 unit tests (node:test)
 │   ├── config.test.js           # Config loading, dot-notation, message templates
 │   ├── bgm.test.js              # Mode resolution, volume clamping
 │   ├── tts.test.js              # Cache keys, voice resolution, command building
@@ -592,7 +592,7 @@ muji/
 ## 🧪 Testing
 
 ```bash
-# Run all 48 tests
+# Run all 65 tests
 npm test
 
 # Run a specific test file

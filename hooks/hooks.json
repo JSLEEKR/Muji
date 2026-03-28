@@ -19,15 +19,6 @@
             "command": "node \"$PLUGIN_DIR/scripts/handlers/on-bash-complete.js\""
           }
         ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$PLUGIN_DIR/scripts/handlers/on-file-write.js\""
-          }
-        ]
       }
     ],
     "Stop": [

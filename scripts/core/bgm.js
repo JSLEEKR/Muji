@@ -169,8 +169,7 @@ class BGMManager {
           }
         } catch { }
         // Holder is alive — wait 100ms and retry
-        const start = Date.now();
-        while (Date.now() - start < 100) { /* busy wait */ }
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
       }
     }
     // Fallback: force remove stale lock after all retries exhausted

@@ -31,13 +31,25 @@ function main() {
     } catch { /* socket did not exist, nothing to remove */ }
   }
 
+  const bgmPidPath = path.join(tmpDir, 'muji-bgm.pid');
   try {
-    if (process.platform === 'win32') {
-      require('node:child_process').execSync('taskkill /f /im mpv.exe 2>nul', { stdio: 'pipe' });
+    if (fs.existsSync(bgmPidPath)) {
+      const bgmPid = parseInt(fs.readFileSync(bgmPidPath, 'utf8').trim(), 10);
+      if (!isNaN(bgmPid)) {
+        if (process.platform === 'win32') {
+          require('node:child_process').execSync(`taskkill /f /pid ${bgmPid} 2>nul`, { stdio: 'pipe' });
+        } else {
+          try { process.kill(bgmPid); } catch { }
+        }
+      }
+      fs.unlinkSync(bgmPidPath);
+      console.log(`Killed mpv process (PID: ${bgmPid}).`);
     } else {
-      require('node:child_process').execSync("pkill -f 'mpv.*muji-bgm-socket' 2>/dev/null || true", { stdio: 'pipe' });
+      if (process.platform !== 'win32') {
+        require('node:child_process').execSync("pkill -f 'mpv.*muji-bgm-socket' 2>/dev/null || true", { stdio: 'pipe' });
+      }
+      console.log('No mpv PID file found; attempted pattern-based cleanup.');
     }
-    console.log('Killed mpv processes.');
   } catch {
     console.log('No mpv processes to kill.');
   }

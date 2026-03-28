@@ -113,16 +113,21 @@ class TTSEngine {
       }
       case 'coqui': {
         const model = this._config.get('tts.engines.coqui.model') || 'tts_models/en/ljspeech/tacotron2-DDC';
-        return `tts --text "${safeText}" --model_name "${model}" --out_path "${outPath}"`;
+        const safeModel = model.replace(/[^a-zA-Z0-9_\-\.\/]/g, '');
+        return `tts --text "${safeText}" --model_name "${safeModel}" --out_path "${outPath}"`;
       }
-      case 'espeak':
-        return `espeak-ng -v "${voice || lang}" -w "${outPath}" "${safeText}"`;
-      case 'system':
+      case 'espeak': {
+        const safeVoice = (voice || lang).replace(/[^a-zA-Z0-9_\-\.+]/g, '');
+        return `espeak-ng -v "${safeVoice}" -w "${outPath}" "${safeText}"`;
+      }
+      case 'system': {
+        const safeVoice = (voice || lang).replace(/[^a-zA-Z0-9_\-\.]/g, '');
         if (process.platform === 'darwin') {
           const aiffPath = outPath.replace(/\.\w+$/, '.aiff');
-          return `say -v "${voice || lang}" -o "${aiffPath}" "${safeText}" && ffmpeg -y -i "${aiffPath}" "${outPath}" 2>/dev/null && rm -f "${aiffPath}"`;
+          return `say -v "${safeVoice}" -o "${aiffPath}" "${safeText}" && ffmpeg -y -i "${aiffPath}" "${outPath}" 2>/dev/null && rm -f "${aiffPath}"`;
         }
-        return `pico2wave -l "${voice || lang}" -w "${outPath}" "${safeText}" 2>/dev/null || espeak-ng -v "${voice || lang}" -w "${outPath}" "${safeText}"`;
+        return `pico2wave -l "${safeVoice}" -w "${outPath}" "${safeText}" 2>/dev/null || espeak-ng -v "${safeVoice}" -w "${outPath}" "${safeText}"`;
+      }
       default:
         throw new Error(`Unknown TTS engine: ${engine}`);
     }
